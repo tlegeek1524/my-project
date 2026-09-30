@@ -37,6 +37,12 @@ export default function MobilePaymentApp() {
   const [touchDeltaX, setTouchDeltaX] = useState<number>(0);
   const [activeSwipingId, setActiveSwipingId] = useState<string | null>(null);
 
+  // Auto-delete state for completed items
+  const [finishingId, setFinishingId] = useState<string | null>(null);
+
+  const DELETE_BTN_WIDTH = 80; // ความกว้างปุ่มลบ
+  const SWIPE_LOCK_THRESHOLD = 70; // ต้องเลื่อนจนสุด (อย่างน้อย 70px) ถ้าไม่ถึงจะเด้งกลับทันที
+
   // Form State
   const [name, setName] = useState("");
   const [principal, setPrincipal] = useState("");
@@ -176,16 +182,34 @@ export default function MobilePaymentApp() {
     setShowAddModal(false);
   };
 
-  // Mark 1 Month Paid
+  // Mark 1 Month Paid (เมื่อจ่ายครบแล้วจะลบไปเองอัตโนมัติ)
   const handlePayMonth = (id: string) => {
-    setItems((prev) =>
-      prev.map((item) => {
-        if (item.id === id && item.paidMonths < item.totalMonths) {
-          return { ...item, paidMonths: item.paidMonths + 1 };
-        }
-        return item;
-      })
-    );
+    const target = items.find((i) => i.id === id);
+    if (!target) return;
+
+    const nextPaidMonths = target.paidMonths + 1;
+
+    if (nextPaidMonths >= target.totalMonths) {
+      // 1. อัปเดตสถานะเป็นจ่ายครบ
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, paidMonths: item.totalMonths } : item
+        )
+      );
+      setFinishingId(id);
+
+      // 2. เมื่อจ่ายครบแล้ว ลบออกจากระบบอัตโนมัติอย่างนุ่มนวล
+      setTimeout(() => {
+        setItems((prev) => prev.filter((item) => item.id !== id));
+        setFinishingId(null);
+      }, 600);
+    } else {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, paidMonths: nextPaidMonths } : item
+        )
+      );
+    }
   };
 
   // Delete
@@ -194,7 +218,7 @@ export default function MobilePaymentApp() {
     setSwipedId(null);
   };
 
-  // Swipe Touch Handlers
+  // Swipe Touch Handlers (ต้องเลื่อนจนสุด ถ้าไม่สุดจะเด้งกลับ)
   const handleTouchStart = (id: string, clientX: number) => {
     setTouchStartX(clientX);
     setActiveSwipingId(id);
@@ -206,13 +230,13 @@ export default function MobilePaymentApp() {
     const diff = clientX - touchStartX;
 
     if (swipedId === id) {
-      // Already open at -75px
-      const newOffset = Math.min(0, Math.max(-95, -75 + diff));
-      setTouchDeltaX(newOffset - (-75));
+      // Already open at -80px
+      const newOffset = Math.min(0, Math.max(-DELETE_BTN_WIDTH, -DELETE_BTN_WIDTH + diff));
+      setTouchDeltaX(newOffset - (-DELETE_BTN_WIDTH));
     } else {
       // Swiping to the left
       if (diff < 0) {
-        setTouchDeltaX(Math.max(-85, diff));
+        setTouchDeltaX(Math.max(-DELETE_BTN_WIDTH, diff));
       } else {
         setTouchDeltaX(0);
       }
@@ -221,15 +245,17 @@ export default function MobilePaymentApp() {
 
   const handleTouchEnd = (id: string) => {
     if (activeSwipingId !== id) return;
+
     if (swipedId === id) {
       if (touchDeltaX > 25) {
         setSwipedId(null);
       }
     } else {
-      if (touchDeltaX < -35) {
+      // ต้องเลื่อนจนสุด (แตะขีด SWIPE_LOCK_THRESHOLD) ถ้าไม่สุดจะเด้งกลับทันที!
+      if (touchDeltaX <= -SWIPE_LOCK_THRESHOLD) {
         setSwipedId(id);
       } else {
-        setSwipedId(null);
+        setSwipedId(null); // เด้งกลับ
       }
     }
     setTouchStartX(null);
@@ -337,22 +363,25 @@ export default function MobilePaymentApp() {
           ) : (
             items.map((item) => {
               const isDone = item.paidMonths >= item.totalMonths;
+              const isFinishing = finishingId === item.id;
               const remainingMonths = item.totalMonths - item.paidMonths;
               const remainingAmount = remainingMonths * item.monthlyInstallment;
 
               const isSwiped = swipedId === item.id;
               const isActivelySwiping = activeSwipingId === item.id;
               const currentOffset = isActivelySwiping
-                ? (isSwiped ? -75 + touchDeltaX : touchDeltaX)
-                : (isSwiped ? -75 : 0);
+                ? (isSwiped ? -DELETE_BTN_WIDTH + touchDeltaX : touchDeltaX)
+                : (isSwiped ? -DELETE_BTN_WIDTH : 0);
 
               return (
                 <div
                   key={item.id}
-                  className="relative overflow-hidden rounded-2xl select-none"
+                  className={`relative overflow-hidden rounded-2xl select-none transition-all duration-500 ${
+                    isFinishing ? "opacity-0 scale-95 max-h-0 my-0 py-0" : ""
+                  }`}
                 >
                   {/* Background Red Delete Button (Revealed on Swipe Left) */}
-                  <div className="absolute inset-y-0 right-0 w-[75px] bg-red-500 flex flex-col items-center justify-center text-white rounded-r-2xl z-0 transition-colors">
+                  <div className="absolute inset-y-0 right-0 w-[80px] bg-red-500 flex flex-col items-center justify-center text-white rounded-r-2xl z-0 transition-colors">
                     <button
                       type="button"
                       onClick={() => handleDelete(item.id)}
@@ -379,11 +408,13 @@ export default function MobilePaymentApp() {
                     onClick={() => {
                       if (isSwiped) setSwipedId(null);
                     }}
-                    className={`relative z-10 p-3.5 rounded-2xl border transition-transform ${
-                      isActivelySwiping ? "duration-0" : "duration-200 ease-out"
+                    className={`relative z-10 p-3.5 rounded-2xl border ${
+                      isActivelySwiping
+                        ? "transition-none"
+                        : "transition-transform duration-300 ease-out"
                     } ${
-                      isDone
-                        ? "bg-slate-50 border-slate-200 opacity-70"
+                      isDone || isFinishing
+                        ? "bg-emerald-50/60 border-emerald-300 shadow-sm"
                         : "bg-white border-slate-200 shadow-xs"
                     }`}
                   >
@@ -484,15 +515,15 @@ export default function MobilePaymentApp() {
                           e.stopPropagation();
                           handlePayMonth(item.id);
                         }}
-                        disabled={isDone}
+                        disabled={isDone || isFinishing}
                         className={`w-full py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 active:scale-98 transition-all ${
-                          isDone
-                            ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                          isDone || isFinishing
+                            ? "bg-emerald-600 text-white shadow-sm cursor-not-allowed opacity-90"
                             : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
                         }`}
                       >
                         <Check className="w-4 h-4" />
-                        {isDone ? "ชำระครบแล้ว" : "จ่ายแล้ว (+1 งวด)"}
+                        {isDone || isFinishing ? "ชำระครบแล้ว! กำลังนำออก... ✅" : "จ่ายแล้ว (+1 งวด)"}
                       </button>
                     </div>
                   </div>
