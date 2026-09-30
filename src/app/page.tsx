@@ -37,9 +37,6 @@ export default function MobilePaymentApp() {
   const [touchDeltaX, setTouchDeltaX] = useState<number>(0);
   const [activeSwipingId, setActiveSwipingId] = useState<string | null>(null);
 
-  // Auto-delete state for completed items
-  const [finishingId, setFinishingId] = useState<string | null>(null);
-
   const DELETE_BTN_WIDTH = 80; // ความกว้างปุ่มลบ
   const SWIPE_LOCK_THRESHOLD = 70; // ต้องเลื่อนจนสุด (อย่างน้อย 70px) ถ้าไม่ถึงจะเด้งกลับทันที
 
@@ -182,34 +179,25 @@ export default function MobilePaymentApp() {
     setShowAddModal(false);
   };
 
-  // Mark 1 Month Paid (เมื่อจ่ายครบแล้วจะลบไปเองอัตโนมัติ)
+  // Mark 1 Month Paid (เมื่อจ่ายครบแล้วจะลบออกเอง auto ทันที)
   const handlePayMonth = (id: string) => {
-    const target = items.find((i) => i.id === id);
-    if (!target) return;
+    setItems((prev) => {
+      const target = prev.find((i) => i.id === id);
+      if (!target) return prev;
 
-    const nextPaidMonths = target.paidMonths + 1;
+      const nextPaidMonths = target.paidMonths + 1;
 
-    if (nextPaidMonths >= target.totalMonths) {
-      // 1. อัปเดตสถานะเป็นจ่ายครบ
-      setItems((prev) =>
-        prev.map((item) =>
-          item.id === id ? { ...item, paidMonths: item.totalMonths } : item
-        )
+      // ถ้าจ่ายงวดนี้แล้วครบจำนวนเดือนทั้งหมด -> ทำการลบออกเอง auto ทันที!
+      if (nextPaidMonths >= target.totalMonths) {
+        return prev.filter((item) => item.id !== id);
+      }
+
+      // ถ้ายังไม่ครบ -> อัปเดตงวดตามปกติ
+      return prev.map((item) =>
+        item.id === id ? { ...item, paidMonths: nextPaidMonths } : item
       );
-      setFinishingId(id);
-
-      // 2. เมื่อจ่ายครบแล้ว ลบออกจากระบบอัตโนมัติอย่างนุ่มนวล
-      setTimeout(() => {
-        setItems((prev) => prev.filter((item) => item.id !== id));
-        setFinishingId(null);
-      }, 600);
-    } else {
-      setItems((prev) =>
-        prev.map((item) =>
-          item.id === id ? { ...item, paidMonths: nextPaidMonths } : item
-        )
-      );
-    }
+    });
+    setSwipedId(null);
   };
 
   // Delete
@@ -363,7 +351,6 @@ export default function MobilePaymentApp() {
           ) : (
             items.map((item) => {
               const isDone = item.paidMonths >= item.totalMonths;
-              const isFinishing = finishingId === item.id;
               const remainingMonths = item.totalMonths - item.paidMonths;
               const remainingAmount = remainingMonths * item.monthlyInstallment;
 
@@ -376,9 +363,7 @@ export default function MobilePaymentApp() {
               return (
                 <div
                   key={item.id}
-                  className={`relative overflow-hidden rounded-2xl select-none transition-all duration-500 ${
-                    isFinishing ? "opacity-0 scale-95 max-h-0 my-0 py-0" : ""
-                  }`}
+                  className="relative overflow-hidden rounded-2xl select-none"
                 >
                   {/* Background Red Delete Button (Revealed on Swipe Left) */}
                   <div className="absolute inset-y-0 right-0 w-[80px] bg-red-500 flex flex-col items-center justify-center text-white rounded-r-2xl z-0 transition-colors">
@@ -412,11 +397,7 @@ export default function MobilePaymentApp() {
                       isActivelySwiping
                         ? "transition-none"
                         : "transition-transform duration-300 ease-out"
-                    } ${
-                      isDone || isFinishing
-                        ? "bg-emerald-50/60 border-emerald-300 shadow-sm"
-                        : "bg-white border-slate-200 shadow-xs"
-                    }`}
+                    } bg-white border-slate-200 shadow-xs`}
                   >
                     {/* Row 1: Name & Monthly Installment */}
                     <div className="flex items-start justify-between gap-2">
@@ -515,15 +496,12 @@ export default function MobilePaymentApp() {
                           e.stopPropagation();
                           handlePayMonth(item.id);
                         }}
-                        disabled={isDone || isFinishing}
-                        className={`w-full py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 active:scale-98 transition-all ${
-                          isDone || isFinishing
-                            ? "bg-emerald-600 text-white shadow-sm cursor-not-allowed opacity-90"
-                            : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                        }`}
+                        className="w-full py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 active:scale-98 transition-all bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
                       >
                         <Check className="w-4 h-4" />
-                        {isDone || isFinishing ? "ชำระครบแล้ว! กำลังนำออก... ✅" : "จ่ายแล้ว (+1 งวด)"}
+                        {remainingMonths === 1
+                          ? "จ่ายงวดสุดท้าย (ชำระครบ & ลบออกทันที)"
+                          : "จ่ายแล้ว (+1 งวด)"}
                       </button>
                     </div>
                   </div>
