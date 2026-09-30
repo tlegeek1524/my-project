@@ -243,6 +243,18 @@ export default function MobilePaymentApp() {
   const ongoingItems = items.filter((i) => i.paidMonths < i.totalMonths);
   const monthlyTotal = ongoingItems.reduce((sum, i) => sum + i.monthlyInstallment, 0);
 
+  // Diff totals: ยอดรวมทั้งหมดที่จะได้ vs ยอดเงินที่คืนมาแล้ว
+  const totalExpectedAmount = items.reduce((sum, i) => sum + i.totalAmount, 0);
+  const totalReturnedAmount = items.reduce(
+    (sum, i) => sum + i.paidMonths * i.monthlyInstallment,
+    0
+  );
+  const totalRemainingAmount = Math.max(0, totalExpectedAmount - totalReturnedAmount);
+  const returnPercent =
+    totalExpectedAmount > 0
+      ? Math.min(100, Math.round((totalReturnedAmount / totalExpectedAmount) * 100))
+      : 0;
+
   return (
     <div className="min-h-screen bg-slate-100 flex justify-center text-slate-800 font-sans antialiased">
       {/* Mobile Screen Container */}
@@ -259,13 +271,57 @@ export default function MobilePaymentApp() {
             </span>
           </div>
 
-          {/* Quick Summary Card */}
+          {/* Quick Summary Card with Diff Progress Bar */}
           <div className="mt-3.5 bg-gradient-to-br from-blue-600 to-indigo-600 text-white p-4 rounded-2xl shadow-xs">
-            <p className="text-xs text-blue-100 font-light">ยอดเก็บเดือนนี้</p>
-            <p className="text-2xl font-bold mt-0.5">
-              ฿{formatMoney(monthlyTotal)}{" "}
-              <span className="text-xs font-normal opacity-80">/เดือน</span>
-            </p>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs text-blue-100 font-light">ยอดเก็บเดือนนี้</p>
+                <p className="text-2xl font-bold mt-0.5">
+                  ฿{formatMoney(monthlyTotal)}{" "}
+                  <span className="text-xs font-normal opacity-80">/เดือน</span>
+                </p>
+              </div>
+              {totalExpectedAmount > 0 && (
+                <div className="text-right">
+                  <span className="text-[11px] bg-white/20 backdrop-blur-xs px-2.5 py-0.5 rounded-full font-medium">
+                    คืนแล้ว {returnPercent}%
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* หลอด Diff ความคืบหน้ายอดเงิน: คืนมาแล้ว vs ทั้งหมดที่จะได้ */}
+            {totalExpectedAmount > 0 && (
+              <div className="mt-3 pt-3 border-t border-white/15">
+                <div className="flex justify-between items-baseline text-xs mb-1.5 font-light">
+                  <span>
+                    คืนมาแล้ว:{" "}
+                    <strong className="font-semibold text-emerald-300">
+                      ฿{formatMoney(totalReturnedAmount)}
+                    </strong>
+                  </span>
+                  <span className="text-blue-100/90 text-[11px]">
+                    ทั้งหมดที่จะได้:{" "}
+                    <strong className="font-semibold text-white">
+                      ฿{formatMoney(totalExpectedAmount)}
+                    </strong>
+                  </span>
+                </div>
+
+                {/* หลอด Progress Bar */}
+                <div className="w-full bg-black/25 h-2.5 rounded-full overflow-hidden p-0.5">
+                  <div
+                    className="bg-emerald-400 h-full rounded-full transition-all duration-500 shadow-xs"
+                    style={{ width: `${returnPercent}%` }}
+                  />
+                </div>
+
+                <div className="flex justify-between items-center text-[11px] text-blue-100/80 mt-1.5 font-light">
+                  <span>ค้างรับอีก: ฿{formatMoney(totalRemainingAmount)}</span>
+                  <span>{returnPercent}%</span>
+                </div>
+              </div>
+            )}
           </div>
         </header>
 
@@ -407,6 +463,18 @@ export default function MobilePaymentApp() {
                           </span>
                         )}
                       </div>
+                    </div>
+
+                    {/* หลอด Diff ความคืบหน้าของแต่ละคน */}
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mt-2">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          isDone ? "bg-emerald-500" : "bg-blue-600"
+                        }`}
+                        style={{
+                          width: `${Math.min(100, Math.round((item.paidMonths / item.totalMonths) * 100))}%`,
+                        }}
+                      />
                     </div>
 
                     {/* Row 4: Action Button (Full Width Clean Green Button) */}
