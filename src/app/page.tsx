@@ -26,7 +26,7 @@ export default function MobilePaymentApp() {
   // Form State
   const [name, setName] = useState("");
   const [principal, setPrincipal] = useState("");
-  const [interestRate, setInterestRate] = useState("0");
+  const [interestRate, setInterestRate] = useState("");
   const [interestType, setInterestType] = useState<"per_month" | "total">("per_month");
   const [totalMonths, setTotalMonths] = useState("6");
   const [day, setDay] = useState("5");
@@ -82,7 +82,7 @@ export default function MobilePaymentApp() {
 
   // Live calculation for the form
   const numPrincipal = parseFloat(principal) || 0;
-  const numRate = parseFloat(interestRate) || 0;
+  const numRate = interestRate.trim() === "" ? 0 : (parseFloat(interestRate) || 0);
   const numMonths = parseInt(totalMonths, 10) || 1;
 
   let calculatedInterest = 0;
@@ -116,7 +116,7 @@ export default function MobilePaymentApp() {
     setItems([newItem, ...items]);
     setName("");
     setPrincipal("");
-    setInterestRate("0");
+    setInterestRate("");
     setInterestType("per_month");
     setTotalMonths("6");
     setDay("5");
@@ -223,10 +223,16 @@ export default function MobilePaymentApp() {
                     </div>
                     <div className="flex justify-between">
                       <span>ดอกเบี้ย:</span>
-                      <span className="text-amber-700 font-medium">
-                        {item.interestRate}% {item.interestType === "per_month" ? "/เดือน" : "รวม"}
-                        {" "}(+฿{(item.totalAmount - item.principal).toLocaleString()})
-                      </span>
+                      {item.interestRate > 0 ? (
+                        <span className="text-amber-700 font-medium">
+                          {item.interestRate}% {item.interestType === "per_month" ? "/เดือน" : "รวม"}
+                          {" "}(+฿{(item.totalAmount - item.principal).toLocaleString()})
+                        </span>
+                      ) : (
+                        <span className="text-emerald-600 font-medium">
+                          ไม่มีดอกเบี้ย (0%)
+                        </span>
+                      )}
                     </div>
                     <div className="flex justify-between border-t border-slate-200 pt-1 text-slate-700">
                       <span>ยอดรวมทั้งสัญญา:</span>
@@ -376,7 +382,7 @@ export default function MobilePaymentApp() {
                     type="number"
                     min="0"
                     step="0.1"
-                    placeholder="เช่น 2 หรือ 0 หากไม่มีดอกเบี้ย"
+                    placeholder="0 (ไม่ใส่ = ไม่มีดอกเบี้ย)"
                     value={interestRate}
                     onChange={(e) => setInterestRate(e.target.value)}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-blue-500"
@@ -421,11 +427,19 @@ export default function MobilePaymentApp() {
                 {numPrincipal > 0 && (
                   <div className="bg-blue-50/80 border border-blue-100 rounded-xl p-3 text-xs space-y-1.5 text-blue-900">
                     <div className="flex justify-between">
-                      <span className="text-blue-700">ดอกเบี้ยรวม:</span>
-                      <strong className="text-blue-800">฿{calculatedInterest.toLocaleString()}</strong>
+                      <span className="text-blue-700">ดอกเบี้ย:</span>
+                      {numRate > 0 ? (
+                        <strong className="text-blue-800">
+                          {numRate}% {interestType === "per_month" ? "/เดือน" : "รวม"} (+฿{calculatedInterest.toLocaleString()})
+                        </strong>
+                      ) : (
+                        <span className="text-emerald-700 font-medium">
+                          ไม่มีดอกเบี้ย (0%)
+                        </span>
+                      )}
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-blue-700">ยอดรวมทั้งสิ้น (เงินต้น+ดอก):</span>
+                      <span className="text-blue-700">ยอดรวมทั้งสิ้น:</span>
                       <strong className="text-blue-800">฿{calculatedTotal.toLocaleString()}</strong>
                     </div>
                     <div className="flex justify-between pt-1 border-t border-blue-200/60 text-sm font-bold text-blue-900">
