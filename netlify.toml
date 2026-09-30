@@ -1,6 +1,9 @@
 [build]
-  command = "npm run build"
+  command = "prisma generate && npm run build"
   publish = ".next"
+
+[build.environment]
+  DATABASE_URL = "file:./dev.db"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
