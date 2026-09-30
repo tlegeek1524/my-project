@@ -31,6 +31,12 @@ export default function MobilePaymentApp() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
 
+  // Swipe-to-delete states
+  const [swipedId, setSwipedId] = useState<string | null>(null);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchDeltaX, setTouchDeltaX] = useState<number>(0);
+  const [activeSwipingId, setActiveSwipingId] = useState<string | null>(null);
+
   // Form State
   const [name, setName] = useState("");
   const [principal, setPrincipal] = useState("");
@@ -65,7 +71,7 @@ export default function MobilePaymentApp() {
     }
   }, [items, isLoaded]);
 
-  // Helper to format currency (handles both integer and float decimals nicely)
+  // Helper to format currency
   const formatMoney = (val: number) =>
     val.toLocaleString("th-TH", {
       minimumFractionDigits: val % 1 !== 0 ? 2 : 0,
@@ -84,7 +90,6 @@ export default function MobilePaymentApp() {
     calculatedInterest = numPrincipal * (numRate / 100);
   }
 
-  // Round interest & total to 2 decimal places to prevent float precision artifacts
   calculatedInterest = Math.round(calculatedInterest * 100) / 100;
   const calculatedTotal = Math.round((numPrincipal + calculatedInterest) * 100) / 100;
   const calculatedMonthly =
@@ -94,14 +99,12 @@ export default function MobilePaymentApp() {
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
 
-    // 1. Name validation
     if (!name.trim()) {
       newErrors.name = "กรุณากรอกชื่อคน";
     } else if (name.trim().length < 2) {
       newErrors.name = "ชื่อต้องมีความยาวอย่างน้อย 2 ตัวอักษร";
     }
 
-    // 2. Principal validation
     if (!principal.trim()) {
       newErrors.principal = "กรุณากรอกยอดเงินต้น";
     } else {
@@ -111,7 +114,6 @@ export default function MobilePaymentApp() {
       }
     }
 
-    // 3. Interest rate validation (optional, default 0 if blank)
     if (interestRate.trim() !== "") {
       const rate = parseFloat(interestRate);
       if (isNaN(rate) || rate < 0) {
@@ -121,7 +123,6 @@ export default function MobilePaymentApp() {
       }
     }
 
-    // 4. Total months validation
     if (!totalMonths.trim()) {
       newErrors.totalMonths = "กรุณาระบุจำนวนเดือน";
     } else {
@@ -133,7 +134,6 @@ export default function MobilePaymentApp() {
       }
     }
 
-    // 5. Day validation
     if (!day.trim()) {
       newErrors.day = "กรุณาระบุวันที่ชำระ";
     } else {
@@ -191,21 +191,64 @@ export default function MobilePaymentApp() {
   // Delete
   const handleDelete = (id: string) => {
     setItems((prev) => prev.filter((item) => item.id !== id));
+    setSwipedId(null);
+  };
+
+  // Swipe Touch Handlers
+  const handleTouchStart = (id: string, clientX: number) => {
+    setTouchStartX(clientX);
+    setActiveSwipingId(id);
+    setTouchDeltaX(0);
+  };
+
+  const handleTouchMove = (id: string, clientX: number) => {
+    if (touchStartX === null || activeSwipingId !== id) return;
+    const diff = clientX - touchStartX;
+
+    if (swipedId === id) {
+      // Already open at -75px
+      const newOffset = Math.min(0, Math.max(-95, -75 + diff));
+      setTouchDeltaX(newOffset - (-75));
+    } else {
+      // Swiping to the left
+      if (diff < 0) {
+        setTouchDeltaX(Math.max(-85, diff));
+      } else {
+        setTouchDeltaX(0);
+      }
+    }
+  };
+
+  const handleTouchEnd = (id: string) => {
+    if (activeSwipingId !== id) return;
+    if (swipedId === id) {
+      if (touchDeltaX > 25) {
+        setSwipedId(null);
+      }
+    } else {
+      if (touchDeltaX < -35) {
+        setSwipedId(id);
+      } else {
+        setSwipedId(null);
+      }
+    }
+    setTouchStartX(null);
+    setTouchDeltaX(0);
+    setActiveSwipingId(null);
   };
 
   if (!isLoaded) return null;
 
-  // Monthly active total (sum of monthly installments for ongoing records)
-  const monthlyTotal = items
-    .filter((i) => i.paidMonths < i.totalMonths)
-    .reduce((sum, i) => sum + i.monthlyInstallment, 0);
+  // Monthly active total
+  const ongoingItems = items.filter((i) => i.paidMonths < i.totalMonths);
+  const monthlyTotal = ongoingItems.reduce((sum, i) => sum + i.monthlyInstallment, 0);
 
   return (
     <div className="min-h-screen bg-slate-100 flex justify-center text-slate-800 font-sans antialiased">
       {/* Mobile Screen Container */}
       <div className="w-full max-w-md bg-white min-h-screen flex flex-col shadow-lg relative pb-24">
         {/* Header */}
-        <header className="p-5 pb-3 border-b border-slate-100">
+        <header className="p-4 pb-3 border-b border-slate-100">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
               <Wallet className="w-6 h-6 text-blue-600" />
@@ -216,22 +259,32 @@ export default function MobilePaymentApp() {
             </span>
           </div>
 
-          {/* Quick Summary Card */}
-          <div className="mt-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-2xl shadow-sm">
-            <p className="text-xs text-blue-100 font-light">ยอดที่ต้องรับรวมทุกเดือน</p>
-            <p className="text-2xl font-bold mt-0.5">
-              ฿{formatMoney(monthlyTotal)}{" "}
-              <span className="text-xs font-normal opacity-80">/เดือน</span>
-            </p>
+          {/* Quick Summary Grid Layout */}
+          <div className="mt-3.5 grid grid-cols-2 gap-2.5">
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-600 text-white p-3.5 rounded-2xl shadow-xs">
+              <p className="text-[11px] text-blue-100 font-light">ยอดเก็บเดือนนี้</p>
+              <p className="text-xl font-bold mt-0.5 truncate">
+                ฿{formatMoney(monthlyTotal)}
+              </p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl shadow-xs flex flex-col justify-between">
+              <p className="text-[11px] text-slate-500 font-medium">กำลังผ่อน / ทั้งหมด</p>
+              <p className="text-xl font-bold text-slate-900 mt-0.5">
+                {ongoingItems.length}{" "}
+                <span className="text-xs font-normal text-slate-400">/ {items.length} คน</span>
+              </p>
+            </div>
           </div>
         </header>
 
         {/* List of People */}
-        <main className="flex-1 p-4 space-y-3 overflow-y-auto">
+        <main className="flex-1 p-3.5 space-y-3 overflow-y-auto">
           {items.length === 0 ? (
-            <div className="text-center py-16 text-slate-400">
+            <div className="text-center py-20 text-slate-400">
               <p className="text-base font-medium">ยังไม่มีรายการบันทึก</p>
-              <p className="text-xs mt-1">กดปุ่ม "+ เพิ่มคน" ด้านล่างเพื่อเริ่มจด</p>
+              <p className="text-xs mt-1 text-slate-400">
+                กดปุ่ม "+ เพิ่มคน / รายการใหม่" ด้านล่างเพื่อเริ่มจด
+              </p>
             </div>
           ) : (
             items.map((item) => {
@@ -239,101 +292,149 @@ export default function MobilePaymentApp() {
               const remainingMonths = item.totalMonths - item.paidMonths;
               const remainingAmount = remainingMonths * item.monthlyInstallment;
 
+              const isSwiped = swipedId === item.id;
+              const isActivelySwiping = activeSwipingId === item.id;
+              const currentOffset = isActivelySwiping
+                ? (isSwiped ? -75 + touchDeltaX : touchDeltaX)
+                : (isSwiped ? -75 : 0);
+
               return (
                 <div
                   key={item.id}
-                  className={`p-4 rounded-2xl border transition-all ${
-                    isDone
-                      ? "bg-slate-50 border-slate-200 opacity-70"
-                      : "bg-white border-slate-200 shadow-xs"
-                  }`}
+                  className="relative overflow-hidden rounded-2xl select-none"
                 >
-                  {/* Row 1: Name & Monthly Installment */}
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h2 className="text-lg font-bold text-slate-900 leading-tight">
-                        {item.name}
-                      </h2>
-                      <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 font-light">
-                        <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                        จ่ายทุกวันที่ <strong className="text-slate-700 font-medium">{item.day}</strong> ของเดือน
-                      </p>
-                    </div>
-
-                    <div className="text-right">
-                      <span className="text-lg font-bold text-blue-600">
-                        ฿{formatMoney(item.monthlyInstallment)}
-                      </span>
-                      <span className="text-xs text-slate-400 block">/งวด</span>
-                    </div>
-                  </div>
-
-                  {/* Row 2: Loan Breakdown (เงินต้น, ดอกเบี้ย, ยอดรวม) */}
-                  <div className="mt-3 bg-slate-50 p-2.5 rounded-xl text-xs space-y-1 text-slate-600">
-                    <div className="flex justify-between">
-                      <span>เงินต้น:</span>
-                      <strong className="text-slate-800">฿{formatMoney(item.principal)}</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>ดอกเบี้ย:</span>
-                      {item.interestRate > 0 ? (
-                        <span className="text-amber-700 font-medium">
-                          {item.interestRate}% {item.interestType === "per_month" ? "/เดือน" : "รวม"}
-                          {" "}(+฿{formatMoney(item.totalAmount - item.principal)})
-                        </span>
-                      ) : (
-                        <span className="text-emerald-600 font-medium">
-                          ไม่มีดอกเบี้ย (0%)
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex justify-between border-t border-slate-200 pt-1 text-slate-700">
-                      <span>ยอดรวมทั้งสัญญา:</span>
-                      <strong className="text-slate-900 font-semibold">฿{formatMoney(item.totalAmount)}</strong>
-                    </div>
-                  </div>
-
-                  {/* Row 3: Status & Progress */}
-                  <div className="mt-2.5 pt-2 flex items-center justify-between text-xs">
-                    <div>
-                      <span className="text-slate-500">จ่ายแล้ว: </span>
-                      <strong className="text-slate-900 font-semibold">
-                        {item.paidMonths}/{item.totalMonths} เดือน
-                      </strong>
-                      {!isDone ? (
-                        <span className="text-amber-600 ml-2 font-medium">
-                          (ค้าง ฿{formatMoney(remainingAmount)})
-                        </span>
-                      ) : (
-                        <span className="text-emerald-600 ml-2 font-semibold">
-                          (ครบแล้ว ✅)
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Row 4: Action Buttons (Only 2 buttons!) */}
-                  <div className="mt-3 flex items-center gap-2">
+                  {/* Background Red Delete Button (Revealed on Swipe Left) */}
+                  <div className="absolute inset-y-0 right-0 w-[75px] bg-red-500 flex flex-col items-center justify-center text-white rounded-r-2xl z-0 transition-colors">
                     <button
-                      onClick={() => handlePayMonth(item.id)}
-                      disabled={isDone}
-                      className={`flex-1 py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 active:scale-98 transition-all ${
-                        isDone
-                          ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                          : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                      }`}
-                    >
-                      <Check className="w-4 h-4" />
-                      {isDone ? "ชำระครบแล้ว" : "จ่ายแล้ว (+1 งวด)"}
-                    </button>
-
-                    <button
+                      type="button"
                       onClick={() => handleDelete(item.id)}
-                      className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
-                      title="ลบ"
+                      className="w-full h-full flex flex-col items-center justify-center gap-1 text-white font-medium text-xs active:bg-red-600"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4 stroke-[2.2]" />
+                      <span>ลบ</span>
                     </button>
+                  </div>
+
+                  {/* Foreground Swipeable Card */}
+                  <div
+                    style={{ transform: `translateX(${currentOffset}px)` }}
+                    onTouchStart={(e) => handleTouchStart(item.id, e.touches[0].clientX)}
+                    onTouchMove={(e) => handleTouchMove(item.id, e.touches[0].clientX)}
+                    onTouchEnd={() => handleTouchEnd(item.id)}
+                    onMouseDown={(e) => handleTouchStart(item.id, e.clientX)}
+                    onMouseMove={(e) => {
+                      if (activeSwipingId === item.id) {
+                        handleTouchMove(item.id, e.clientX);
+                      }
+                    }}
+                    onMouseUp={() => handleTouchEnd(item.id)}
+                    onClick={() => {
+                      if (isSwiped) setSwipedId(null);
+                    }}
+                    className={`relative z-10 p-3.5 rounded-2xl border transition-transform ${
+                      isActivelySwiping ? "duration-0" : "duration-200 ease-out"
+                    } ${
+                      isDone
+                        ? "bg-slate-50 border-slate-200 opacity-70"
+                        : "bg-white border-slate-200 shadow-xs"
+                    }`}
+                  >
+                    {/* Row 1: Name & Monthly Installment */}
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <h2 className="text-base font-bold text-slate-900 leading-tight">
+                            {item.name}
+                          </h2>
+                          {isDone ? (
+                            <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md font-medium">
+                              ครบแล้ว ✅
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-md font-medium">
+                              เหลือ {remainingMonths} ด.
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 font-light">
+                          <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                          จ่ายทุกวันที่ <strong className="text-slate-700 font-medium">{item.day}</strong> ของเดือน
+                        </p>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-lg font-bold text-blue-600">
+                          ฿{formatMoney(item.monthlyInstallment)}
+                        </span>
+                        <span className="text-xs text-slate-400 block">/งวด</span>
+                      </div>
+                    </div>
+
+                    {/* Row 2: Loan Breakdown (Clean 3-Column Grid Layout) */}
+                    <div className="mt-3 bg-slate-50/90 p-2 rounded-xl grid grid-cols-3 gap-1 text-center text-xs border border-slate-100">
+                      <div className="border-r border-slate-200/70 pr-1">
+                        <span className="text-[11px] text-slate-400 block font-light">เงินต้น</span>
+                        <strong className="text-slate-800 text-xs font-semibold">
+                          ฿{formatMoney(item.principal)}
+                        </strong>
+                      </div>
+                      <div className="border-r border-slate-200/70 px-1">
+                        <span className="text-[11px] text-slate-400 block font-light">ดอกเบี้ย</span>
+                        {item.interestRate > 0 ? (
+                          <span className="text-amber-700 font-medium text-xs">
+                            {item.interestRate}% <span className="text-[10px]">{item.interestType === "per_month" ? "/ด." : "รวม"}</span>
+                          </span>
+                        ) : (
+                          <span className="text-emerald-600 font-medium text-xs">0%</span>
+                        )}
+                      </div>
+                      <div className="pl-1">
+                        <span className="text-[11px] text-slate-400 block font-light">ยอดรวม</span>
+                        <strong className="text-slate-900 text-xs font-semibold">
+                          ฿{formatMoney(item.totalAmount)}
+                        </strong>
+                      </div>
+                    </div>
+
+                    {/* Row 3: Status & Progress (2-Column Grid / Flex) */}
+                    <div className="mt-2.5 pt-2 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-slate-500">จ่ายแล้ว: </span>
+                        <strong className="text-slate-900 font-semibold">
+                          {item.paidMonths}/{item.totalMonths} เดือน
+                        </strong>
+                      </div>
+                      <div>
+                        {!isDone ? (
+                          <span className="text-amber-700 font-medium text-xs">
+                            ค้าง ฿{formatMoney(remainingAmount)}
+                          </span>
+                        ) : (
+                          <span className="text-emerald-600 font-semibold text-xs">
+                            ชำระเสร็จสิ้น
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Row 4: Action Button (Full Width Clean Green Button) */}
+                    <div className="mt-3">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePayMonth(item.id);
+                        }}
+                        disabled={isDone}
+                        className={`w-full py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 active:scale-98 transition-all ${
+                          isDone
+                            ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                            : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                        }`}
+                      >
+                        <Check className="w-4 h-4" />
+                        {isDone ? "ชำระครบแล้ว" : "จ่ายแล้ว (+1 งวด)"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -342,7 +443,7 @@ export default function MobilePaymentApp() {
         </main>
 
         {/* Bottom Floating Bar: "+ เพิ่มคน / รายการใหม่" */}
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-slate-200 max-w-md mx-auto z-10">
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-slate-200 max-w-md mx-auto z-20">
           <button
             onClick={() => {
               setErrors({});
@@ -524,7 +625,7 @@ export default function MobilePaymentApp() {
                       className={`w-full p-2.5 rounded-xl text-slate-900 text-sm focus:outline-none transition-all ${
                         errors.day
                           ? "bg-red-50/50 border border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-400"
-                        : "bg-slate-50 border border-slate-200 focus:border-blue-500"
+                          : "bg-slate-50 border border-slate-200 focus:border-blue-500"
                       }`}
                     />
                     {errors.day && (
