@@ -259,21 +259,13 @@ export default function MobilePaymentApp() {
             </span>
           </div>
 
-          {/* Quick Summary Grid Layout */}
-          <div className="mt-3.5 grid grid-cols-2 gap-2.5">
-            <div className="bg-gradient-to-br from-blue-600 to-indigo-600 text-white p-3.5 rounded-2xl shadow-xs">
-              <p className="text-[11px] text-blue-100 font-light">ยอดเก็บเดือนนี้</p>
-              <p className="text-xl font-bold mt-0.5 truncate">
-                ฿{formatMoney(monthlyTotal)}
-              </p>
-            </div>
-            <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl shadow-xs flex flex-col justify-between">
-              <p className="text-[11px] text-slate-500 font-medium">กำลังผ่อน / ทั้งหมด</p>
-              <p className="text-xl font-bold text-slate-900 mt-0.5">
-                {ongoingItems.length}{" "}
-                <span className="text-xs font-normal text-slate-400">/ {items.length} คน</span>
-              </p>
-            </div>
+          {/* Quick Summary Card */}
+          <div className="mt-3.5 bg-gradient-to-br from-blue-600 to-indigo-600 text-white p-4 rounded-2xl shadow-xs">
+            <p className="text-xs text-blue-100 font-light">ยอดเก็บเดือนนี้</p>
+            <p className="text-2xl font-bold mt-0.5">
+              ฿{formatMoney(monthlyTotal)}{" "}
+              <span className="text-xs font-normal opacity-80">/เดือน</span>
+            </p>
           </div>
         </header>
 
