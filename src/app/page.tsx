@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, Check, Trash2, X, Calendar, Wallet, Percent, CircleDollarSign } from "lucide-react";
+import { Plus, Check, Trash2, X, Calendar, Wallet, AlertCircle } from "lucide-react";
 
 interface RecordItem {
   id: string;
@@ -14,6 +14,14 @@ interface RecordItem {
   paidMonths: number; // จ่ายแล้วกี่งวด
   monthlyInstallment: number; // ยอดจ่ายต่องวด
   totalAmount: number; // เงินต้น + ดอกเบี้ย
+}
+
+interface FormErrors {
+  name?: string;
+  principal?: string;
+  interestRate?: string;
+  totalMonths?: string;
+  day?: string;
 }
 
 const STORAGE_KEY = "mobile_loan_simple_records_v2";
@@ -30,6 +38,9 @@ export default function MobilePaymentApp() {
   const [interestType, setInterestType] = useState<"per_month" | "total">("per_month");
   const [totalMonths, setTotalMonths] = useState("6");
   const [day, setDay] = useState("5");
+
+  // Validation Errors State
+  const [errors, setErrors] = useState<FormErrors>({});
 
   // Load saved data
   useEffect(() => {
@@ -89,7 +100,7 @@ export default function MobilePaymentApp() {
 
   // Live calculation for the form
   const numPrincipal = parseFloat(principal) || 0;
-  const numRate = interestRate.trim() === "" ? 0 : (parseFloat(interestRate) || 0);
+  const numRate = interestRate.trim() === "" ? 0 : parseFloat(interestRate) || 0;
   const numMonths = parseInt(totalMonths, 10) || 1;
 
   let calculatedInterest = 0;
@@ -105,10 +116,67 @@ export default function MobilePaymentApp() {
   const calculatedMonthly =
     numMonths > 0 ? Math.round((calculatedTotal / numMonths) * 100) / 100 : 0;
 
+  // Validation function
+  const validateForm = (): boolean => {
+    const newErrors: FormErrors = {};
+
+    // 1. Name validation
+    if (!name.trim()) {
+      newErrors.name = "กรุณากรอกชื่อคน";
+    } else if (name.trim().length < 2) {
+      newErrors.name = "ชื่อต้องมีความยาวอย่างน้อย 2 ตัวอักษร";
+    }
+
+    // 2. Principal validation
+    if (!principal.trim()) {
+      newErrors.principal = "กรุณากรอกยอดเงินต้น";
+    } else {
+      const p = parseFloat(principal);
+      if (isNaN(p) || p <= 0) {
+        newErrors.principal = "เงินต้นต้องเป็นตัวเลขมากกว่า 0 บาท";
+      }
+    }
+
+    // 3. Interest rate validation (optional, default 0 if blank)
+    if (interestRate.trim() !== "") {
+      const rate = parseFloat(interestRate);
+      if (isNaN(rate) || rate < 0) {
+        newErrors.interestRate = "อัตราดอกเบี้ยต้องไม่ติดลบ";
+      } else if (rate > 100) {
+        newErrors.interestRate = "อัตราดอกเบี้ยไม่ควรเกิน 100%";
+      }
+    }
+
+    // 4. Total months validation
+    if (!totalMonths.trim()) {
+      newErrors.totalMonths = "กรุณาระบุจำนวนเดือน";
+    } else {
+      const m = Number(totalMonths);
+      if (isNaN(m) || m < 1 || !Number.isInteger(m)) {
+        newErrors.totalMonths = "ต้องเป็นจำนวนเต็มอย่างน้อย 1 เดือน";
+      } else if (m > 360) {
+        newErrors.totalMonths = "สูงสุดไม่เกิน 360 เดือน";
+      }
+    }
+
+    // 5. Day validation
+    if (!day.trim()) {
+      newErrors.day = "กรุณาระบุวันที่ชำระ";
+    } else {
+      const d = Number(day);
+      if (isNaN(d) || d < 1 || d > 31 || !Number.isInteger(d)) {
+        newErrors.day = "วันที่ต้องอยู่ระหว่าง 1 ถึง 31";
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   // Add Item
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || numPrincipal <= 0 || numMonths <= 0) return;
+    if (!validateForm()) return;
 
     const newItem: RecordItem = {
       id: Date.now().toString(),
@@ -130,6 +198,7 @@ export default function MobilePaymentApp() {
     setInterestType("per_month");
     setTotalMonths("6");
     setDay("5");
+    setErrors({});
     setShowAddModal(false);
   };
 
@@ -158,7 +227,7 @@ export default function MobilePaymentApp() {
     .reduce((sum, i) => sum + i.monthlyInstallment, 0);
 
   return (
-    <div className="min-h-screen bg-slate-100 flex justify-center text-slate-800 font-sans">
+    <div className="min-h-screen bg-slate-100 flex justify-center text-slate-800 font-sans antialiased">
       {/* Mobile Screen Container */}
       <div className="w-full max-w-md bg-white min-h-screen flex flex-col shadow-lg relative pb-24">
         {/* Header */}
@@ -175,7 +244,7 @@ export default function MobilePaymentApp() {
 
           {/* Quick Summary Card */}
           <div className="mt-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-2xl shadow-sm">
-            <p className="text-xs text-blue-100">ยอดที่ต้องรับรวมทุกเดือน</p>
+            <p className="text-xs text-blue-100 font-light">ยอดที่ต้องรับรวมทุกเดือน</p>
             <p className="text-2xl font-bold mt-0.5">
               ฿{formatMoney(monthlyTotal)}{" "}
               <span className="text-xs font-normal opacity-80">/เดือน</span>
@@ -211,9 +280,9 @@ export default function MobilePaymentApp() {
                       <h2 className="text-lg font-bold text-slate-900 leading-tight">
                         {item.name}
                       </h2>
-                      <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                      <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 font-light">
                         <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                        จ่ายทุกวันที่ <strong className="text-slate-700">{item.day}</strong> ของเดือน
+                        จ่ายทุกวันที่ <strong className="text-slate-700 font-medium">{item.day}</strong> ของเดือน
                       </p>
                     </div>
 
@@ -246,7 +315,7 @@ export default function MobilePaymentApp() {
                     </div>
                     <div className="flex justify-between border-t border-slate-200 pt-1 text-slate-700">
                       <span>ยอดรวมทั้งสัญญา:</span>
-                      <strong className="text-slate-900">฿{formatMoney(item.totalAmount)}</strong>
+                      <strong className="text-slate-900 font-semibold">฿{formatMoney(item.totalAmount)}</strong>
                     </div>
                   </div>
 
@@ -301,7 +370,10 @@ export default function MobilePaymentApp() {
         {/* Bottom Floating Bar: "+ เพิ่มคน / รายการใหม่" */}
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-slate-200 max-w-md mx-auto z-10">
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => {
+              setErrors({});
+              setShowAddModal(true);
+            }}
             className="w-full bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-semibold py-3.5 px-4 rounded-2xl shadow-md flex items-center justify-center gap-2 text-base transition-all"
           >
             <Plus className="w-5 h-5 stroke-[2.5]" />
@@ -325,37 +397,60 @@ export default function MobilePaymentApp() {
                 </button>
               </div>
 
-              <form onSubmit={handleAdd} className="space-y-3 text-sm">
+              <form onSubmit={handleAdd} noValidate className="space-y-3 text-sm">
                 {/* ชื่อ */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">
-                    ชื่อคน
+                    ชื่อคน <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    required
                     placeholder="เช่น สมชาย ใจดี"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-blue-500"
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
+                    }}
+                    className={`w-full p-2.5 rounded-xl text-slate-900 text-sm focus:outline-none transition-all ${
+                      errors.name
+                        ? "bg-red-50/50 border border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-400"
+                        : "bg-slate-50 border border-slate-200 focus:border-blue-500"
+                    }`}
                   />
+                  {errors.name && (
+                    <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1 font-normal">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      {errors.name}
+                    </p>
+                  )}
                 </div>
 
                 {/* เงินต้น */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">
-                    ยอดเงินต้น (บาท)
+                    ยอดเงินต้น (บาท) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="number"
-                    required
-                    min="1"
                     step="any"
                     placeholder="เช่น 10000"
                     value={principal}
-                    onChange={(e) => setPrincipal(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-blue-500"
+                    onChange={(e) => {
+                      setPrincipal(e.target.value);
+                      if (errors.principal) setErrors((prev) => ({ ...prev, principal: undefined }));
+                    }}
+                    className={`w-full p-2.5 rounded-xl text-slate-900 text-sm focus:outline-none transition-all ${
+                      errors.principal
+                        ? "bg-red-50/50 border border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-400"
+                        : "bg-slate-50 border border-slate-200 focus:border-blue-500"
+                    }`}
                   />
+                  {errors.principal && (
+                    <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1 font-normal">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      {errors.principal}
+                    </p>
+                  )}
                 </div>
 
                 {/* ดอกเบี้ย % และประเภทดอกเบี้ย */}
@@ -391,46 +486,79 @@ export default function MobilePaymentApp() {
                   </div>
                   <input
                     type="number"
-                    min="0"
                     step="any"
                     placeholder="0 (ไม่ใส่ = ไม่มีดอกเบี้ย)"
                     value={interestRate}
-                    onChange={(e) => setInterestRate(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-blue-500"
+                    onChange={(e) => {
+                      setInterestRate(e.target.value);
+                      if (errors.interestRate) setErrors((prev) => ({ ...prev, interestRate: undefined }));
+                    }}
+                    className={`w-full p-2.5 rounded-xl text-slate-900 text-sm focus:outline-none transition-all ${
+                      errors.interestRate
+                        ? "bg-red-50/50 border border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-400"
+                        : "bg-slate-50 border border-slate-200 focus:border-blue-500"
+                    }`}
                   />
+                  {errors.interestRate && (
+                    <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1 font-normal">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      {errors.interestRate}
+                    </p>
+                  )}
                 </div>
 
                 {/* จำนวนเดือน และ วันที่จ่าย */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      จำนวนเดือนทั้งหมด
+                      จำนวนเดือนทั้งหมด <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
-                      required
-                      min="1"
                       placeholder="เช่น 10"
                       value={totalMonths}
-                      onChange={(e) => setTotalMonths(e.target.value)}
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-blue-500"
+                      onChange={(e) => {
+                        setTotalMonths(e.target.value);
+                        if (errors.totalMonths) setErrors((prev) => ({ ...prev, totalMonths: undefined }));
+                      }}
+                      className={`w-full p-2.5 rounded-xl text-slate-900 text-sm focus:outline-none transition-all ${
+                        errors.totalMonths
+                          ? "bg-red-50/50 border border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-400"
+                          : "bg-slate-50 border border-slate-200 focus:border-blue-500"
+                      }`}
                     />
+                    {errors.totalMonths && (
+                      <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1 font-normal">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        {errors.totalMonths}
+                      </p>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      จ่ายทุกวันที่
+                      จ่ายทุกวันที่ <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
-                      required
-                      min="1"
-                      max="31"
                       placeholder="1 - 31"
                       value={day}
-                      onChange={(e) => setDay(e.target.value)}
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-blue-500"
+                      onChange={(e) => {
+                        setDay(e.target.value);
+                        if (errors.day) setErrors((prev) => ({ ...prev, day: undefined }));
+                      }}
+                      className={`w-full p-2.5 rounded-xl text-slate-900 text-sm focus:outline-none transition-all ${
+                        errors.day
+                          ? "bg-red-50/50 border border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-400"
+                        : "bg-slate-50 border border-slate-200 focus:border-blue-500"
+                      }`}
                     />
+                    {errors.day && (
+                      <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1 font-normal">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        {errors.day}
+                      </p>
+                    )}
                   </div>
                 </div>
 
