@@ -340,33 +340,33 @@ export default function MobilePaymentApp() {
                     }`}
                   >
                     {/* Row 1: Name & Monthly Installment */}
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="flex items-center gap-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <h2 className="text-base font-bold text-slate-900 leading-tight">
                             {item.name}
                           </h2>
                           {isDone ? (
-                            <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md font-medium">
+                            <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md font-medium shrink-0">
                               ครบแล้ว ✅
                             </span>
                           ) : (
-                            <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-md font-medium">
+                            <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-md font-medium shrink-0">
                               เหลือ {remainingMonths} ด.
                             </span>
                           )}
                         </div>
                         <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 font-light">
-                          <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                          <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                           จ่ายทุกวันที่ <strong className="text-slate-700 font-medium">{item.day}</strong> ของเดือน
                         </p>
                       </div>
 
-                      <div className="text-right">
-                        <span className="text-lg font-bold text-blue-600">
+                      <div className="text-right shrink-0 whitespace-nowrap pt-0.5">
+                        <span className="text-base sm:text-lg font-bold text-blue-600">
                           ฿{formatMoney(item.monthlyInstallment)}
                         </span>
-                        <span className="text-xs text-slate-400 block">/งวด</span>
+                        <span className="text-xs text-slate-400 font-normal ml-1">/งวด</span>
                       </div>
                     </div>
 
