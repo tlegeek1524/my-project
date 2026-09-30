@@ -24,7 +24,7 @@ interface FormErrors {
   day?: string;
 }
 
-const STORAGE_KEY = "mobile_loan_simple_records_v2";
+const STORAGE_KEY = "mobile_loan_records_v3";
 
 export default function MobilePaymentApp() {
   const [items, setItems] = useState<RecordItem[]>([]);
@@ -42,43 +42,17 @@ export default function MobilePaymentApp() {
   // Validation Errors State
   const [errors, setErrors] = useState<FormErrors>({});
 
-  // Load saved data
+  // Load saved data (start clean with no sample data)
   useEffect(() => {
     try {
       const data = localStorage.getItem(STORAGE_KEY);
       if (data) {
         setItems(JSON.parse(data));
       } else {
-        // Initial sample
-        setItems([
-          {
-            id: "1",
-            name: "สมชาย",
-            principal: 10000,
-            interestRate: 2,
-            interestType: "per_month",
-            totalMonths: 5,
-            day: 5,
-            paidMonths: 1,
-            monthlyInstallment: 2200,
-            totalAmount: 11000,
-          },
-          {
-            id: "2",
-            name: "สมหญิง",
-            principal: 5000,
-            interestRate: 0,
-            interestType: "per_month",
-            totalMonths: 5,
-            day: 28,
-            paidMonths: 5,
-            monthlyInstallment: 1000,
-            totalAmount: 5000,
-          },
-        ]);
+        setItems([]);
       }
     } catch {
-      // fallback
+      setItems([]);
     } finally {
       setIsLoaded(true);
     }
